@@ -745,6 +745,153 @@ else:
                 st.metric("Ratio R/R", f"{position['risk_reward_ratio']:.2f}:1",
                          "✅" if position['risk_reward_ratio'] >= 2 else "⚠️")
 
+            st.markdown("---")
+
+            # GRÁFICO DE CANDLESTICK
+            st.subheader("📈 Gráfico de Preços (Candlestick)")
+
+            hist = fii_data['historico']
+
+            # Criar gráfico de candlestick
+            fig_candle = go.Figure(data=[go.Candlestick(
+                x=hist.index,
+                open=hist['Open'],
+                high=hist['High'],
+                low=hist['Low'],
+                close=hist['Close'],
+                name='Preço'
+            )])
+
+            # Adicionar médias móveis
+            hist['SMA20'] = hist['Close'].rolling(window=20).mean()
+            hist['SMA50'] = hist['Close'].rolling(window=50).mean()
+
+            fig_candle.add_trace(go.Scatter(
+                x=hist.index,
+                y=hist['SMA20'],
+                mode='lines',
+                name='SMA 20',
+                line=dict(color='orange', width=1)
+            ))
+
+            fig_candle.add_trace(go.Scatter(
+                x=hist.index,
+                y=hist['SMA50'],
+                mode='lines',
+                name='SMA 50',
+                line=dict(color='blue', width=1)
+            ))
+
+            # Adicionar linhas de suporte e resistência
+            if entry_data['support_levels']:
+                for support in entry_data['support_levels'][-3:]:  # Últimos 3 suportes
+                    fig_candle.add_hline(
+                        y=support, 
+                        line_dash="dash", 
+                        line_color="green",
+                        annotation_text=f"Suporte: R$ {support:.2f}",
+                        annotation_position="right"
+                    )
+
+            if entry_data['resistance_levels']:
+                for resistance in entry_data['resistance_levels'][-3:]:  # Últimas 3 resistências
+                    fig_candle.add_hline(
+                        y=resistance, 
+                        line_dash="dash", 
+                        line_color="red",
+                        annotation_text=f"Resistência: R$ {resistance:.2f}",
+                        annotation_position="right"
+                    )
+
+            # Adicionar linha de entrada sugerida
+            fig_candle.add_hline(
+                y=entry_data['entry_price'], 
+                line_dash="dot", 
+                line_color="yellow", 
+                line_width=2,
+                annotation_text=f"Entrada: R$ {entry_data['entry_price']:.2f}",
+                annotation_position="left"
+            )
+
+            fig_candle.update_layout(
+                title=f"{fii_data['ticker'].replace('.SA', '')} - Últimos 12 Meses",
+                yaxis_title="Preço (R$)",
+                xaxis_title="Data",
+                height=500,
+                xaxis_rangeslider_visible=False,
+                hovermode='x unified'
+            )
+
+            st.plotly_chart(fig_candle, use_container_width=True)
+
+            st.markdown("---")
+
+            # ORDEM SUGERIDA DE COMPRA
+            st.subheader("📋 Ordem de Compra Sugerida")
+
+            ordem_col1, ordem_col2 = st.columns(2)
+
+            with ordem_col1:
+                st.markdown(f"""
+                **📊 Dados da Ordem:**
+                - **Ticker**: {fii_data['ticker'].replace('.SA', '')}
+                - **Tipo**: Ordem Limitada
+                - **Operação**: COMPRA
+                - **Quantidade**: {position['quantity']} cotas
+                - **Preço de Entrada**: R$ {entry_data['entry_price']:.2f}
+                - **Validade**: 30 dias (GTC - Good Till Cancelled)
+                """)
+
+                st.info(f"""
+                💡 **Estratégia**: {entry_data['entry_type']}
+
+                Aguardar o preço atingir R$ {entry_data['entry_price']:.2f} 
+                (desconto de {entry_data['discount_pct']:.1f}% vs preço atual)
+                """)
+
+            with ordem_col2:
+                st.markdown(f"""
+                **🎯 Gestão de Risco:**
+                - **Stop Loss**: R$ {entry_data['stop_loss']:.2f} (-5%)
+                - **Take Profit**: R$ {entry_data['target_price']:.2f} 
+                  (+{((entry_data['target_price']/entry_data['entry_price'])-1)*100:.1f}%)
+                - **Ratio Risco/Retorno**: {position['risk_reward_ratio']:.2f}:1
+                - **Perda Máxima**: R$ {position['potential_loss']:.2f}
+                - **Ganho Esperado**: R$ {position['potential_gain']:.2f}
+                """)
+
+                if position['risk_reward_ratio'] >= 2:
+                    st.success("✅ Ratio favorável (≥ 2:1)")
+                else:
+                    st.warning("⚠️ Ratio desfavorável (< 2:1)")
+
+            # Botão para copiar ordem
+            ordem_texto = f"""ORDEM DE COMPRA - {fii_data['ticker'].replace('.SA', '')}
+
+Tipo: Ordem Limitada
+Operação: COMPRA
+Quantidade: {position['quantity']} cotas
+Preço Limite: R$ {entry_data['entry_price']:.2f}
+Validade: 30 dias
+
+STOP LOSS: R$ {entry_data['stop_loss']:.2f}
+TAKE PROFIT: R$ {entry_data['target_price']:.2f}
+
+Investimento Total: R$ {position['total_investment']:.2f}
+Dividendo Mensal Esperado: R$ {position['monthly_dividend']:.2f}
+Dividend Yield: {fii_data['dividend_yield']:.2f}%
+
+---
+Gerado por FII Analyzer em {datetime.now().strftime('%d/%m/%Y %H:%M')}
+"""
+
+            st.download_button(
+                label="📥 Baixar Ordem (TXT)",
+                data=ordem_texto,
+                file_name=f"ordem_compra_{fii_data['ticker'].replace('.SA', '')}_{datetime.now().strftime('%Y%m%d')}.txt",
+                mime="text/plain"
+            )
+
 
         with tab2:
             st.header("📈 Comparativo de FIIs")
