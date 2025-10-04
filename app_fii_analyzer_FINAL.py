@@ -140,11 +140,40 @@ class FIIAnalyzerApp:
                 hist['Close'].iloc[-1]
             )
 
+            # CORREÇÃO: Calcular DY manualmente para evitar erros
+            dividend_yield = 0
+
+            # Método 1: Usar dividendYield da API (se existir e for razoável)
+            api_dy = info.get('dividendYield', 0)
+            if api_dy:
+                # Se já está em percentual (>1), não multiplica
+                if api_dy > 1:
+                    dividend_yield = float(api_dy)
+                else:
+                    # Se está em decimal (0.XX), multiplica por 100
+                    dividend_yield = float(api_dy * 100)
+
+                # Validação: DY razoável para FIIs (0.5% a 25%)
+                if dividend_yield < 0.5 or dividend_yield > 25:
+                    dividend_yield = 0  # Marca como inválido
+
+            # Método 2: Calcular DY manualmente a partir dos dividendos
+            if dividend_yield == 0 and not dividends.empty:
+                total_dividendos_12m = float(dividends.sum())
+                if total_dividendos_12m > 0 and preco_atual > 0:
+                    dividend_yield = (total_dividendos_12m / preco_atual) * 100
+
+                    # Validação: limitar entre 0.5% e 25%
+                    if dividend_yield < 0.5:
+                        dividend_yield = 0.5
+                    elif dividend_yield > 25:
+                        dividend_yield = 25
+
             data = {
                 'ticker': ticker,
                 'nome': info.get('longName', ticker.replace('.SA', '')),
                 'preco_atual': float(preco_atual),
-                'dividend_yield': float(info.get('dividendYield', 0) * 100) if info.get('dividendYield') else 0,
+                'dividend_yield': dividend_yield,  # ← CORRIGIDO
                 'p_vp': float(info.get('priceToBook', 1.0) or 1.0),
                 'volume_medio': float(info.get('averageVolume', hist['Volume'].mean()) or hist['Volume'].mean()),
                 'volatilidade': float(volatility),
@@ -156,6 +185,7 @@ class FIIAnalyzerApp:
                 'historico': hist,
                 'dividendos': dividends
             }
+
 
             return data
 
